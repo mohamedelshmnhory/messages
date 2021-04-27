@@ -104,15 +104,16 @@ class _ProgressButtonWidgetState extends State<ProgressButtonWidget>
         });
       });
     _controller.forward();
-
-    setState(() {
-      _state = 1;
-    });
+    if (mounted)
+      setState(() {
+        _state = 1;
+      });
 
     Timer(Duration(milliseconds: 3300), () {
-      setState(() {
-        _state = 2;
-      });
+      if (mounted)
+        setState(() {
+          _state = 2;
+        });
     });
   }
 }

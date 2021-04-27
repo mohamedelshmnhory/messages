@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:messages/loading_widget.dart';
 import 'package:messages/progress_button.dart';
 import 'package:share/share.dart';
 
 import './helpers/db_helper.dart';
+import 'aya.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -53,11 +55,12 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   final _form = GlobalKey<FormState>();
-  List texts = [];
+  List<Aya> ayat = [];
   int num = 0;
   bool add = false;
   bool show = false;
   bool loadingMsg = false;
+  String editedText;
   // double targetValue = 24.0;
 
   @override
@@ -65,77 +68,7 @@ class _MyHomePageState extends State<MyHomePage> {
     super.initState();
     fetchAndSet();
     initialize();
-  }
-
-  Future initialize() async {
-    var initializationSettingsAndroid = AndroidInitializationSettings('logo');
-    var initializationSettingsIOS = IOSInitializationSettings(
-        requestAlertPermission: true,
-        requestBadgePermission: true,
-        requestSoundPermission: true,
-        onDidReceiveLocalNotification:
-            (int id, String title, String body, String payload) async {});
-    var initializationSettings = InitializationSettings(
-        android: initializationSettingsAndroid, iOS: initializationSettingsIOS);
-    final notificationAppLaunchDetails =
-        await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
-    if (notificationAppLaunchDetails?.didNotificationLaunchApp ?? false) {
-      await showMsg();
-    }
-    await flutterLocalNotificationsPlugin.initialize(initializationSettings,
-        onSelectNotification: (String payload) async {
-      if (payload != null) {
-        debugPrint('notification payload: ' + payload);
-        await showMsg();
-      }
-    });
-  }
-
-  Future scheduleNotification(list) async {
-    var androidPlatformChannelSpecifics = AndroidNotificationDetails(
-      '_notif',
-      'notif',
-      'Channel for notification',
-      icon: 'logo',
-      importance: Importance.max,
-      priority: Priority.high,
-      largeIcon: DrawableResourceAndroidBitmap('logo'),
-    );
-    var iOSPlatformChannelSpecifics = IOSNotificationDetails(
-        presentAlert: true, presentBadge: true, presentSound: true);
-    var platformChannelSpecifics = NotificationDetails(
-        android: androidPlatformChannelSpecifics,
-        iOS: iOSPlatformChannelSpecifics);
-    await flutterLocalNotificationsPlugin.periodicallyShow(
-      0,
-      'رسالتك اليوم',
-      // list[texts.length == 0 ? 0 : Random().nextInt(texts.length)],
-      '',
-      RepeatInterval.daily,
-      platformChannelSpecifics,
-      payload: '',
-    );
-  }
-
-  Future<void> fetchAndSet() async {
-    final dataList = await DBHelper.getData('ayat');
-    texts = dataList.map((e) => e['aya']).toList();
-    scheduleNotification(texts);
-  }
-
-  Future showMsg() async {
-    setState(() {
-      loadingMsg = true;
-      num = texts.length == 0 ? 0 : Random().nextInt(texts.length);
-      add = false;
-      show = true;
-      //  targetValue = targetValue == 24.0 ? 48.0 : 24.0;
-    });
-    Future.delayed(Duration(seconds: 2)).then((value) {
-      setState(() {
-        loadingMsg = false;
-      });
-    });
+    scheduleNotification();
   }
 
   @override
@@ -187,35 +120,31 @@ class _MyHomePageState extends State<MyHomePage> {
                             style: TextStyle(color: Colors.black),
                             onSaved: (value) {
                               if (value.isNotEmpty) {
-                                texts.add(value);
-                                DBHelper.insert('ayat', {'aya': value});
+                                if (editedText == null) {
+                                  String date = DateTime.now().toString();
+                                  DBHelper.insert(
+                                      'ayat', Aya(date: date, aya: value));
+                                } else {
+                                  String date = DateTime.now().toString();
+                                  DBHelper.update(
+                                          'ayat',
+                                          Aya(
+                                              date: date,
+                                              aya: value,
+                                              id: ayat[num].id))
+                                      .then((value) => editedText = null);
+                                }
                               }
                             },
                             maxLines: null,
                             cursorColor: Colors.black,
+                            initialValue: editedText ?? null,
                           ),
-                          // OutlineButton(
-                          //   borderSide: BorderSide(
-                          //     color: Colors.white,
-                          //     width: 2,
-                          //     style: BorderStyle.solid,
-                          //   ),
-                          //   shape: RoundedRectangleBorder(
-                          //       borderRadius: BorderRadius.circular(8)),
-                          //   onPressed: () {
-                          //     _form.currentState.save();
-                          //     setState(() {
-                          //       show = false;
-                          //       add = false;
-                          //     });
-                          //   },
-                          //   child: Text('حفظ'),
-                          //   color: Colors.black,
-                          //   textColor: Colors.white,
-                          // ),
                           ProgressButtonWidget(() async {
+                            FocusScope.of(context).unfocus();
                             _form.currentState.save();
-                            await Future.delayed(Duration(seconds: 2))
+                            await fetchAndSet();
+                            await Future.delayed(Duration(seconds: 1))
                                 .then((value) {
                               if (mounted)
                                 setState(() {
@@ -261,7 +190,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                             fit: BoxFit.fill)),
                                     // height:
                                     //     MediaQuery.of(context).size.height * .3,
-                                    child: texts.length == 0
+                                    child: ayat.length == 0
                                         ? Center(
                                             child: Text(
                                               'لم تقم باضافة اياتك بعد',
@@ -275,7 +204,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                         : Center(
                                             child: SingleChildScrollView(
                                               child: Text(
-                                                texts[num].toString(),
+                                                ayat[num].aya,
                                                 style: TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   color: Colors.black,
@@ -287,16 +216,62 @@ class _MyHomePageState extends State<MyHomePage> {
                                           ),
                                   ),
                                 ),
-                                IconButton(
-                                    icon: Icon(
-                                      Icons.share,
-                                      color: Colors.teal,
-                                    ),
-                                    onPressed: () {
-                                      if (texts.length != 0)
-                                        Share.share(texts[num].toString(),
-                                            subject: 'رسائل قرأنيه');
-                                    })
+                                if (ayat.length > 0)
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      IconButton(
+                                          icon: Icon(
+                                            Icons.share,
+                                            color: Colors.teal,
+                                            size: 30,
+                                          ),
+                                          onPressed: () {
+                                            if (ayat.length != 0)
+                                              Share.share(ayat[num].aya,
+                                                  subject: 'رسائل قرأنيه');
+                                          }),
+                                      IconButton(
+                                          icon: Icon(
+                                            Icons.edit,
+                                            color: Colors.white,
+                                            size: 30,
+                                          ),
+                                          onPressed: () {
+                                            setState(() {
+                                              editedText = ayat[num].aya;
+                                              show = false;
+                                              add = true;
+                                            });
+                                          }),
+                                      IconButton(
+                                          icon: Icon(
+                                            Icons.delete,
+                                            color: Colors.red,
+                                            size: 30,
+                                          ),
+                                          onPressed: () {
+                                            DBHelper.delete(
+                                                    'ayat', ayat[num].id)
+                                                .then((value) {
+                                              fetchAndSet();
+                                              Fluttertoast.showToast(
+                                                  msg: "تم حذف الآيه",
+                                                  toastLength:
+                                                      Toast.LENGTH_SHORT,
+                                                  gravity: ToastGravity.BOTTOM,
+                                                  timeInSecForIosWeb: 1,
+                                                  backgroundColor: Colors.white,
+                                                  textColor: Colors.black,
+                                                  fontSize: 16.0);
+                                              setState(() {
+                                                show = false;
+                                                add = false;
+                                              });
+                                            });
+                                          }),
+                                    ],
+                                  )
                               ],
                             ),
                     )
@@ -339,5 +314,76 @@ class _MyHomePageState extends State<MyHomePage> {
         ),
       ),
     );
+  }
+
+  Future initialize() async {
+    const initializationSettingsAndroid =
+        AndroidInitializationSettings('flower');
+    final initializationSettingsIOS = IOSInitializationSettings(
+        requestAlertPermission: true,
+        requestBadgePermission: true,
+        requestSoundPermission: true,
+        onDidReceiveLocalNotification:
+            (int id, String title, String body, String payload) async {});
+    final initializationSettings = InitializationSettings(
+        android: initializationSettingsAndroid, iOS: initializationSettingsIOS);
+    final notificationAppLaunchDetails =
+        await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
+    if (notificationAppLaunchDetails?.didNotificationLaunchApp ?? false) {
+      await showMsg();
+    }
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings,
+        onSelectNotification: (String payload) async {
+      if (payload != null) {
+        // debugPrint('notification payload: ' + payload);
+        fetchAndSet().then((value) => showMsg());
+      }
+    });
+  }
+
+  Future scheduleNotification() async {
+    var androidPlatformChannelSpecifics = AndroidNotificationDetails(
+      'no badge channel', 'no badge name', 'no badge description',
+      importance: Importance.max,
+      priority: Priority.high,
+      ticker: 'ticker',
+      enableLights: true,
+      icon: 'flower',
+      // largeIcon: DrawableResourceAndroidBitmap('ic_launcher'),
+    );
+    var iOSPlatformChannelSpecifics = IOSNotificationDetails(
+        presentAlert: true, presentBadge: true, presentSound: true);
+    var platformChannelSpecifics = NotificationDetails(
+        android: androidPlatformChannelSpecifics,
+        iOS: iOSPlatformChannelSpecifics);
+    await flutterLocalNotificationsPlugin.periodicallyShow(
+      0,
+      '         رساله',
+      null,
+      RepeatInterval.daily,
+      platformChannelSpecifics,
+      androidAllowWhileIdle: true,
+      payload: '',
+    );
+  }
+
+  Future<void> fetchAndSet() async {
+    final dataList = await DBHelper.getData('ayat');
+    ayat = dataList.map((e) => Aya.fromMap(e)).toList();
+  }
+
+  Future showMsg() async {
+    setState(() {
+      loadingMsg = true;
+      add = false;
+      show = true;
+      //  targetValue = targetValue == 24.0 ? 48.0 : 24.0;
+    });
+    Future.delayed(Duration(seconds: 2)).then((value) {
+      num = ayat.length == 0 ? 0 : Random().nextInt(ayat.length);
+      setState(() {
+        loadingMsg = false;
+      });
+    });
   }
 }
