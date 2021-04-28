@@ -12,6 +12,7 @@ import 'package:share/share.dart';
 
 import './helpers/db_helper.dart';
 import 'aya.dart';
+import 'helpers/share_service.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -61,6 +62,7 @@ class _MyHomePageState extends State<MyHomePage> {
   bool show = false;
   bool loadingMsg = false;
   String editedText;
+  String _sharedText;
   // double targetValue = 24.0;
 
   @override
@@ -69,6 +71,18 @@ class _MyHomePageState extends State<MyHomePage> {
     fetchAndSet();
     initialize();
     scheduleNotification();
+    ShareService()
+      ..onDataReceived = _handleSharedData
+      ..getSharedData().then(_handleSharedData);
+  }
+
+  void _handleSharedData(String sharedData) {
+    if (sharedData.length > 4)
+      setState(() {
+        _sharedText = sharedData;
+        show = false;
+        add = true;
+      });
   }
 
   @override
@@ -123,7 +137,8 @@ class _MyHomePageState extends State<MyHomePage> {
                                 if (editedText == null) {
                                   String date = DateTime.now().toString();
                                   DBHelper.insert(
-                                      'ayat', Aya(date: date, aya: value));
+                                          'ayat', Aya(date: date, aya: value))
+                                      .then((value) => _sharedText = null);
                                 } else {
                                   String date = DateTime.now().toString();
                                   DBHelper.update(
@@ -138,7 +153,7 @@ class _MyHomePageState extends State<MyHomePage> {
                             },
                             maxLines: null,
                             cursorColor: Colors.black,
-                            initialValue: editedText ?? null,
+                            initialValue: editedText ?? _sharedText ?? null,
                           ),
                           ProgressButtonWidget(() async {
                             FocusScope.of(context).unfocus();
@@ -373,6 +388,8 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future showMsg() async {
+    _sharedText = null;
+    editedText = null;
     setState(() {
       loadingMsg = true;
       add = false;
