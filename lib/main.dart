@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:messages/loading_widget.dart';
 import 'package:messages/progress_button.dart';
 import 'package:share/share.dart';
+import 'package:workmanager/workmanager.dart';
 
 import './helpers/db_helper.dart';
 import 'aya.dart';
@@ -23,7 +25,55 @@ void main() async {
     statusBarColor: Colors.black, // status bar color
   ));
   WidgetsFlutterBinding.ensureInitialized();
+  initialize();
+  await Workmanager().initialize(callbackDispatcher);
+  Workmanager().registerPeriodicTask("1", "task",
+      existingWorkPolicy: ExistingWorkPolicy.append,
+      inputData: {'string': 'string'},
+      initialDelay: Duration(seconds: 10),
+      frequency: Duration(days: 1),
+      constraints: Constraints(
+          networkType: NetworkType.not_required, requiresDeviceIdle: false));
   runApp(MyApp());
+}
+
+void callbackDispatcher() {
+  Workmanager().executeTask((task, inputData) async {
+    List<Aya> ayat = [];
+    String aya = "";
+    var androidPlatformChannelSpecifics = AndroidNotificationDetails(
+      'no badge channel', 'no badge name', 'no badge description',
+      importance: Importance.max,
+      priority: Priority.high,
+      ticker: 'ticker',
+      enableLights: true,
+      icon: 'flower',
+      styleInformation: BigTextStyleInformation(''),
+// largeIcon: DrawableResourceAndroidBitmap('ic_launcher'),
+    );
+    var iOSPlatformChannelSpecifics = IOSNotificationDetails(
+        presentAlert: true, presentBadge: true, presentSound: true);
+    var platformChannelSpecifics = NotificationDetails(
+        android: androidPlatformChannelSpecifics,
+        iOS: iOSPlatformChannelSpecifics);
+    await DBHelper.getData('ayat')
+        .then((dataList) => ayat = dataList.map((e) => Aya.fromMap(e)).toList())
+        .then((value) {
+      aya = ayat.length == 0
+          ? "لم تقم باضافة اياتك بعد"
+          : ayat[Random().nextInt(ayat.length)].aya;
+    }).then((value) async {
+      if (ayat.length > 0)
+        await flutterLocalNotificationsPlugin.show(
+          0,
+          'رسالتك اليوم',
+          aya,
+          platformChannelSpecifics,
+          payload: '',
+        );
+    });
+    return Future.value(true);
+  });
 }
 
 class MyApp extends StatelessWidget {
@@ -63,14 +113,11 @@ class _MyHomePageState extends State<MyHomePage> {
   bool loadingMsg = false;
   String editedText;
   String _sharedText;
-  // double targetValue = 24.0;
 
   @override
   void initState() {
     super.initState();
-    fetchAndSet();
-    initialize();
-    scheduleNotification();
+    // scheduleNotification();
     ShareService()
       ..onDataReceived = _handleSharedData
       ..getSharedData().then(_handleSharedData);
@@ -109,9 +156,9 @@ class _MyHomePageState extends State<MyHomePage> {
             children: [
               if (add)
                 Container(
-                  padding:
-                      EdgeInsets.only(left: 10, right: 10, top: 30, bottom: 30),
-                  margin: EdgeInsets.all(10),
+                  padding: const EdgeInsets.only(
+                      left: 10, right: 10, top: 30, bottom: 30),
+                  margin: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: Colors.black45,
                     borderRadius: BorderRadius.circular(30),
@@ -124,14 +171,14 @@ class _MyHomePageState extends State<MyHomePage> {
                         children: [
                           TextFormField(
                             decoration: InputDecoration(
-                              contentPadding: EdgeInsets.symmetric(
+                              contentPadding: const EdgeInsets.symmetric(
                                   vertical: 15.0, horizontal: 10.0),
                               border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(15.0)),
                               fillColor: Colors.white54,
                               filled: true,
                             ),
-                            style: TextStyle(color: Colors.black),
+                            style: const TextStyle(color: Colors.black),
                             onSaved: (value) {
                               if (value.isNotEmpty) {
                                 if (editedText == null) {
@@ -158,7 +205,6 @@ class _MyHomePageState extends State<MyHomePage> {
                           ProgressButtonWidget(() async {
                             FocusScope.of(context).unfocus();
                             _form.currentState.save();
-                            await fetchAndSet();
                             await Future.delayed(Duration(seconds: 1))
                                 .then((value) {
                               if (mounted)
@@ -183,9 +229,6 @@ class _MyHomePageState extends State<MyHomePage> {
                                 TweenAnimationBuilder(
                                   curve: Curves.ease,
                                   tween: Tween<double>(begin: 0, end: 400),
-                                  // onEnd: () {
-                                  //   setState(() => targetValue = 400);
-                                  // },
                                   duration: Duration(seconds: 4),
                                   builder: (BuildContext context, double size,
                                       Widget child) {
@@ -196,8 +239,8 @@ class _MyHomePageState extends State<MyHomePage> {
                                     );
                                   },
                                   child: Container(
-                                    margin: EdgeInsets.only(top: 30),
-                                    padding: EdgeInsets.all(60),
+                                    margin: const EdgeInsets.only(top: 30),
+                                    padding: const EdgeInsets.all(60),
                                     decoration: BoxDecoration(
                                         image: DecorationImage(
                                             image:
@@ -209,7 +252,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                         ? Center(
                                             child: Text(
                                               'لم تقم باضافة اياتك بعد',
-                                              style: TextStyle(
+                                              style: const TextStyle(
                                                 fontWeight: FontWeight.bold,
                                                 color: Colors.black,
                                               ),
@@ -220,7 +263,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                             child: SingleChildScrollView(
                                               child: Text(
                                                 ayat[num].aya,
-                                                style: TextStyle(
+                                                style: const TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   color: Colors.black,
                                                 ),
@@ -269,7 +312,6 @@ class _MyHomePageState extends State<MyHomePage> {
                                             DBHelper.delete(
                                                     'ayat', ayat[num].id)
                                                 .then((value) {
-                                              fetchAndSet();
                                               Fluttertoast.showToast(
                                                   msg: "تم حذف الآيه",
                                                   toastLength:
@@ -303,7 +345,8 @@ class _MyHomePageState extends State<MyHomePage> {
                         onPressed: showMsg,
                         child: Text(
                           'رساله',
-                          style: TextStyle(color: Colors.black, fontSize: 30),
+                          style: const TextStyle(
+                              color: Colors.black, fontSize: 30),
                         ),
                       ),
                     ),
@@ -320,7 +363,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   },
                   child: Text(
                     'إضافة آيه',
-                    style: TextStyle(color: Colors.white, fontSize: 30),
+                    style: const TextStyle(color: Colors.white, fontSize: 30),
                   ),
                   // color: Colors.transparent,
                 ),
@@ -331,60 +374,9 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  Future initialize() async {
-    const initializationSettingsAndroid =
-        AndroidInitializationSettings('flower');
-    final initializationSettingsIOS = IOSInitializationSettings(
-        requestAlertPermission: true,
-        requestBadgePermission: true,
-        requestSoundPermission: true,
-        onDidReceiveLocalNotification:
-            (int id, String title, String body, String payload) async {});
-    final initializationSettings = InitializationSettings(
-        android: initializationSettingsAndroid, iOS: initializationSettingsIOS);
-    final notificationAppLaunchDetails =
-        await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
-    if (notificationAppLaunchDetails?.didNotificationLaunchApp ?? false) {
-      await showMsg();
-    }
-    await flutterLocalNotificationsPlugin.initialize(initializationSettings,
-        onSelectNotification: (String payload) async {
-      if (payload != null) {
-        // debugPrint('notification payload: ' + payload);
-        fetchAndSet().then((value) => showMsg());
-      }
-    });
-  }
-
-  Future scheduleNotification() async {
-    var androidPlatformChannelSpecifics = AndroidNotificationDetails(
-      'no badge channel', 'no badge name', 'no badge description',
-      importance: Importance.max,
-      priority: Priority.high,
-      ticker: 'ticker',
-      enableLights: true,
-      icon: 'flower',
-      // largeIcon: DrawableResourceAndroidBitmap('ic_launcher'),
-    );
-    var iOSPlatformChannelSpecifics = IOSNotificationDetails(
-        presentAlert: true, presentBadge: true, presentSound: true);
-    var platformChannelSpecifics = NotificationDetails(
-        android: androidPlatformChannelSpecifics,
-        iOS: iOSPlatformChannelSpecifics);
-    await flutterLocalNotificationsPlugin.periodicallyShow(
-      0,
-      '         رساله',
-      null,
-      RepeatInterval.daily,
-      platformChannelSpecifics,
-      androidAllowWhileIdle: true,
-      payload: '',
-    );
-  }
-
   Future<void> fetchAndSet() async {
-    final dataList = await DBHelper.getData('ayat');
-    ayat = dataList.map((e) => Aya.fromMap(e)).toList();
+    await DBHelper.getData('ayat').then(
+        (dataList) => ayat = dataList.map((e) => Aya.fromMap(e)).toList());
   }
 
   Future showMsg() async {
@@ -394,13 +386,61 @@ class _MyHomePageState extends State<MyHomePage> {
       loadingMsg = true;
       add = false;
       show = true;
-      //  targetValue = targetValue == 24.0 ? 48.0 : 24.0;
     });
-    Future.delayed(Duration(seconds: 2)).then((value) {
+    await fetchAndSet().then((value) {
       num = ayat.length == 0 ? 0 : Random().nextInt(ayat.length);
       setState(() {
         loadingMsg = false;
       });
     });
   }
+
+  // Future scheduleNotification() async {
+  //   var androidPlatformChannelSpecifics = AndroidNotificationDetails(
+  //     'no badge channel', 'no badge name', 'no badge description',
+  //     importance: Importance.max,
+  //     priority: Priority.high,
+  //     ticker: 'ticker',
+  //     enableLights: true,
+  //     icon: 'flower',
+  //     // largeIcon: DrawableResourceAndroidBitmap('ic_launcher'),
+  //   );
+  //   var iOSPlatformChannelSpecifics = IOSNotificationDetails(
+  //       presentAlert: true, presentBadge: true, presentSound: true);
+  //   var platformChannelSpecifics = NotificationDetails(
+  //       android: androidPlatformChannelSpecifics,
+  //       iOS: iOSPlatformChannelSpecifics);
+  //   await flutterLocalNotificationsPlugin.periodicallyShow(
+  //     0,
+  //     '         رساله',
+  //     null,
+  //     RepeatInterval.daily,
+  //     platformChannelSpecifics,
+  //     androidAllowWhileIdle: true,
+  //     payload: '',
+  //   );
+  // }
+}
+
+Future initialize() async {
+  const initializationSettingsAndroid = AndroidInitializationSettings('flower');
+  final initializationSettingsIOS = IOSInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+      onDidReceiveLocalNotification:
+          (int id, String title, String body, String payload) async {});
+  final initializationSettings = InitializationSettings(
+      android: initializationSettingsAndroid, iOS: initializationSettingsIOS);
+  final notificationAppLaunchDetails =
+      await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
+  if (notificationAppLaunchDetails?.didNotificationLaunchApp ?? false) {
+    // await showMsg();
+  }
+  await flutterLocalNotificationsPlugin.initialize(initializationSettings,
+      onSelectNotification: (String payload) async {
+    if (payload != null) {
+      // await showMsg();
+    }
+  });
 }

@@ -1,7 +1,5 @@
 import 'package:flutter/services.dart';
 
-/// This service is responsible for talking with the OS to see if anything was
-/// shared with the application.
 class ShareService {
   void Function(String) onDataReceived;
 
